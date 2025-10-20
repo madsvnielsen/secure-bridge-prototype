@@ -1,0 +1,43 @@
+networks:
+  net_internet: {}
+  net_cloud:
+    internal: true
+  net_onprem:
+    internal: true
+
+services:
+  edge:
+    container_name: edge
+    image: nginx:alpine
+    ports: ["8080:80"]
+    volumes:
+      - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [api, ws]
+    networks: [net_internet, net_cloud]
+
+  api:
+    container_name: api
+    image: ealen/echo-server
+    environment: [LOG=1]
+    networks: [net_internet, net_cloud]
+
+  ws:
+    container_name: ws
+    image: jmalloc/echo-server
+    environment:
+      - PORT=8080
+      - WEBSOCKET_ROOT=/ws
+    networks: [net_cloud]
+
+
+  bridge:
+    container_name: bridge
+    image: curlimages/curl:8.10.1
+    command: ["sh","-lc","sleep infinity"]
+    networks: [net_onprem, net_internet]
+
+  salto:
+    container_name: salto
+    image: ealen/echo-server
+    environment: [LOG=1]
+    networks: [net_onprem]
