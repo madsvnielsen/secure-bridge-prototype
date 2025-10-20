@@ -17,23 +17,21 @@ services:
 
   api:
     container_name: api
-    image: ealen/echo-server
-    environment: [LOG=1]
+    build: ./api
+    environment:
+      - APP_ENV=local
     networks: [net_internet, net_cloud]
 
   ws:
     container_name: ws
-    image: jmalloc/echo-server
+    build: ./ws
     environment:
       - PORT=8080
-      - WEBSOCKET_ROOT=/ws
     networks: [net_cloud]
-
 
   bridge:
     container_name: bridge
-    image: curlimages/curl:8.10.1
-    command: ["sh","-lc","sleep infinity"]
+    build: ./bridge
     networks: [net_onprem, net_internet]
 
   salto:
