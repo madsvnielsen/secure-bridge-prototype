@@ -6,7 +6,7 @@ const wsUrl = "ws://edge/ws/";
 
 async function tick() {
   try {
-    const r = await axios.get(`${apiBase}health`, { timeout: 3000 });
+    const r = await axios.get(`${apiBase}/health`, { timeout: 3000 });
     console.log("api health", r.data);
   } catch (e) {
     console.log("api fail", e.message);
