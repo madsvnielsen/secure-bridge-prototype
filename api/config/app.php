@@ -14,6 +14,7 @@ return [
     */
 
     'name' => env('APP_NAME', 'Laravel'),
+    'pairing_code_secret' => env('PAIRING_CODE_SECRET'),
 
     /*
     |--------------------------------------------------------------------------
