@@ -18,15 +18,14 @@ export async function getToken(
   });
 
   const client = axios.create({
-    baseURL: apiBase,          // e.g. "https://api.hococo.internal"
+    baseURL: apiBase,         
     httpsAgent,
-    // optional: explicit timeout
     timeout: 10_000,
   });
 
   const res = await client.post(
     `/bridges/${bridgeConfigurationId}/token`,
-    null, // no body
+    null, 
     {
       headers: {
         "Content-Type": "application/json",
@@ -45,6 +44,5 @@ export async function getToken(
     );
   }
 
-  // Expected: { accessToken, tokenType, expiresIn, scope }
   return res.data;
 }

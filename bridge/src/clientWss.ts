@@ -1,7 +1,6 @@
-// src/client_wss.ts
 import WebSocket, { type RawData } from "ws";
 import { IncomingMessage, ClientRequest } from "http";
-import { clientConfig } from "./config.ts";
+import { clientConfig } from "./config";
 
 export function initBridgeWs() {
   const options = clientConfig();
@@ -41,6 +40,7 @@ export function initBridgeWs() {
   ws.on("close", (code: number, data: RawData) => {
     const reason = data?.toString?.() || "";
     console.log("WSS CLOSED", code, reason);
+    initBridgeWs(); // Reconnect
   });
 
   ws.on("error", (err: Error) => {
