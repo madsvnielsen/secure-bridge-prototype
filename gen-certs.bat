@@ -1,10 +1,8 @@
 @echo off
 setlocal
 
-REM --- Adjust this if your openssl.exe is somewhere else ---
 set "OPENSSL=C:\Program Files\Git\usr\bin\openssl.exe"
 
-REM --- Relative dirs from the project root (where you run this .bat) ---
 set "CERT_DIR=api\certs"
 set "CA_DIR=%CERT_DIR%\ca"
 set "API_DIR=%CERT_DIR%\api"
@@ -15,7 +13,6 @@ echo ==^> Using OpenSSL at: %OPENSSL%
 echo ==^> Cert root: %CERT_DIR%
 echo.
 
-REM --- Create directories if missing ---
 if not exist "%CA_DIR%" mkdir "%CA_DIR%"
 if not exist "%API_DIR%" mkdir "%API_DIR%"
 if not exist "%WS_DIR%" mkdir "%WS_DIR%"

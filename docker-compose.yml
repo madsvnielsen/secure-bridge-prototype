@@ -16,6 +16,7 @@ services:
       - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./api/certs/api:/etc/nginx/certs/api:ro
       - ./api/certs/ws:/etc/nginx/certs/ws:ro
+      - ./api/certs/ca/ca.crt:/etc/nginx/certs/ca/hococo_ca.crt:ro
     depends_on: [api, ws]
     networks:
       net_internet:
@@ -35,6 +36,7 @@ services:
     networks: [net_internet, net_cloud]
 
 
+
   ws:
     container_name: ws
     build: ./ws
@@ -45,14 +47,18 @@ services:
   bridge:
     container_name: bridge
     build: ./bridge
+    environment:
+      - BRIDGE_API_CA_PATH=/etc/ssl/certs/hococo_ca.crt
+      - BRIDGE_STATE_DIR=/var/lib/hococo-bridge
     volumes:
       - ./api/certs/ca/ca.crt:/etc/ssl/certs/hococo_ca.crt:ro
     ports:
       - "18080:8080"
     networks: [net_onprem, net_internet]
 
-  salto:
-    container_name: salto
-    image: ealen/echo-server
-    environment: [LOG=1]
-    networks: [net_onprem]
+  admin:
+    container_name: admin
+    build: ./admin
+    ports:
+      - "3000:80"
+    networks: [net_internet]

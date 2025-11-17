@@ -22,7 +22,7 @@ return new class extends Migration {
             $table->timestamp('completed_at')->nullable();
 
             $table->string('ip_created')->nullable();
-            $table->unsignedBigInteger('claimed_bridge_configuration_id')->nullable();
+            $table->uuid('claimed_bridge_configuration_id')->nullable();
 
             $table->timestamps(); 
         });
