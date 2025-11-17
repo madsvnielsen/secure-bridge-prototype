@@ -8,6 +8,10 @@ const listenerConfig = Object.freeze({
   host: process.env.WSS_HOST || "ws.hococo.internal",
   port: Number(process.env.WSS_PORT || 9443),
 });
+const httpListenerConfig = Object.freeze({
+  host: "api.hococo.internal",
+  port: 443,
+});
 
 const httpConfig = Object.freeze({
     enableHttp2: false,
@@ -34,5 +38,17 @@ const buildClientConfig = () =>
     servername: listenerConfig.host,
   });
 
+const buildAPIClientConfig = () =>
+Object.freeze({
+  ...httpListenerConfig,
+  ...httpConfig,
+
+  key: fs.readFileSync(certConfig.clientKey, "utf8"),
+  cert: fs.readFileSync(certConfig.clientCert, "utf8"),
+  ca: fs.readFileSync(certConfig.caBundle, "utf8"),
+  servername: httpListenerConfig.host,
+  });
+
 export const clientConfig = buildClientConfig;
-export { certConfig, listenerConfig, httpConfig };
+export const apiClientConfig = buildAPIClientConfig;
+export { certConfig, listenerConfig, httpConfig};

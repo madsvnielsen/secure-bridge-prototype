@@ -9,6 +9,8 @@ import forge from "node-forge";
 import { initBridgeWs } from "./clientWss.ts";
 import { bridgeStatusHtml } from "./pages/bridgeStatus.ts";
 import { ClientRequest, IncomingMessage } from "http";
+import { getToken } from "./tokenHandler.ts";
+import { apiClientConfig, clientConfig } from "./config.ts";
 
 
 const apiBase = "https://api.hococo.internal/api";
@@ -229,6 +231,7 @@ app.post("/bridge/pair/finalize", async (req, res) => {
     // Pass API response through to the caller
     res.status(r.status).json(data);
     initBridgeWs();
+    getToken(data.bridgeConfigurationId, apiClientConfig(), apiBase);
   } catch (err: any) {
     console.error(
       "Error calling API /bridges/pair/finalize from Bridge:",

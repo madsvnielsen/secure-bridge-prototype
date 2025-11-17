@@ -23,7 +23,7 @@ export function initBridgeWs() {
     console.log("WSS OPEN");
     ws.send(
       JSON.stringify({
-        hello: "bridge (mtls)",
+        hello: "bridge",
         time: new Date().toISOString(),
       })
     );
