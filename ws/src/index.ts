@@ -109,6 +109,66 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+   if (req.method === "POST" && req.url === "/admin/ws/bridges/command") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk.toString("utf8")));
+    req.on("end", () => {
+      try {
+        const rawCertHeader = req.headers["ssl-client-cert"];
+        const pem = normalizePem(rawCertHeader as string | string[]);
+        if (!pem) {
+          res.statusCode = 401;
+          return res.end("Missing or invalid client cert");
+        }
+
+        const role = getClientRoleFromCert(pem);
+        if (role.type !== "api") {
+          res.statusCode = 403;
+          return res.end("Forbidden: only API client is allowed");
+        }
+
+        const payload = JSON.parse(body || "{}");
+        const bridgeId  = String(payload.bridgeConfigurationId || "").trim();
+        const command   = String(payload.command || "").trim();
+        const cmdType   = (payload.type && String(payload.type)) || "command";
+        const cmdBody   = payload.payload ?? null;
+        const requestId = payload.requestId || null;
+
+        if (!bridgeId || !command) {
+          res.statusCode = 400;
+          return res.end("Missing bridgeConfigurationId or command");
+        }
+
+        const socket = bridgeConnections.get(bridgeId);
+        if (!socket || socket.readyState !== socket.OPEN) {
+          console.log("No active WS connection for bridge", bridgeId);
+          res.statusCode = 404;
+          return res.end("No active bridge connection");
+        }
+
+        const msg = {
+          type: cmdType,
+          command,
+          requestId,
+          payload: cmdBody,
+          sentAt: new Date().toISOString(),
+          from: "server",
+        };
+
+        console.log("Sending command to bridge", bridgeId, ":", msg);
+        socket.send(JSON.stringify(msg));
+
+        res.statusCode = 202;
+        return res.end("Command dispatched");
+      } catch (err: any) {
+        console.error("Admin command error:", err);
+        res.statusCode = 500;
+        return res.end("Internal error");
+      }
+    });
+    return;
+  }
+
   console.log("HTTP request on WS server:", req.method, req.url);
   res.statusCode = 400;
   res.setHeader("Content-Type", "text/plain");

@@ -72,6 +72,65 @@ if (app()->environment('local')) {
             'status'                => 'revoked',
         ]);
     });
+
+    Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id) {
+    $data = $request->validate([
+        'command' => 'required|string|max:255',
+        'type'    => 'sometimes|string|max:255',   
+        'payload' => 'sometimes|array',            
+        'requestId' => 'sometimes|string|max:255', 
+    ]);
+
+    $bridgeConfig = BridgeConfiguration::where('bridge_configuration_id', $id)->first();
+    if (! $bridgeConfig) {
+        return response()->json([
+            'error'   => 'not_found',
+            'message' => 'Bridge configuration not found',
+        ], 404);
+    }
+
+    $baseUrl = config('app.ws_admin_url', env('WS_ADMIN_URL', 'https://ws.hococo.internal:9443/admin/ws'));
+
+    try {
+        $response = Http::withOptions([
+            'cert'    => env('WS_ADMIN_CERT', '/app/certs/api/api-client.crt'),
+            'ssl_key' => env('WS_ADMIN_KEY',  '/app/certs/api/api-client.key'),
+            'verify'  => env('WS_ADMIN_CA',   '/app/certs/ca/ca.crt'),
+            'timeout' => 5,
+        ])->post($baseUrl . '/bridges/command', [
+            'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
+            'type'                  => $data['type'] ?? 'command',
+            'command'               => $data['command'],
+            'payload'               => $data['payload'] ?? null,
+            'requestId'             => $data['requestId'] ?? null,
+        ]);
+
+        if (! $response->successful()) {
+            return response()->json([
+                'error'   => 'ws_command_failed',
+                'message' => 'WSS responded with HTTP ' . $response->status(),
+                'body'    => $response->body(),
+            ], 502);
+        }
+
+        return response()->json([
+            'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
+            'status'                => 'command_dispatched',
+            'command'               => $data['command'],
+        ], 202);
+    } catch (\Throwable $e) {
+        \Log::warning('Failed to send command to WSS', [
+           'bridge_configuration_id' => $bridgeConfig->bridge_configuration_id,
+           'command'                 => $data['command'],
+           'error'                   => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'error'   => 'ws_unreachable',
+            'message' => 'Could not reach WSS admin endpoint',
+        ], 502);
+    }
+});
 }
 
 Route::post('/bridges/pair/start', function (Request $request, PairingService $pairingService) {
