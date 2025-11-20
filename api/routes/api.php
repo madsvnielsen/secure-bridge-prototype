@@ -160,9 +160,21 @@ Route::post('/bridges/pair/finalize', function (Request $request, PairingService
     $tx                        = $result['tx'];
     $deviceCertificateChainPem = $result['deviceCertificateChainPem'];
     $caBundlePem               = $result['caBundlePem'];
+    $serial                    = $result['caSerial'];
 
     $wssUrl     = config('app.wss_url', env('WSS_URL', 'wss://ws.hococo.internal/ws'));
     $apiBaseUrl = config('app.api_base_url', env('API_BASE_URL', 'https://api.hococo.internal/api'));
+
+    $bridgeConfig = BridgeConfiguration::where('bridge_configuration_id', $tx->claimed_bridge_configuration_id)->first();
+    if (!$bridgeConfig) {
+        return response()->json([
+            'error'   => 'not_found',
+            'message' => 'Bridge configuration not found',
+        ], 404);
+    }
+
+    $bridgeConfig->cert_serial = $serial;
+    $bridgeConfig->save();
 
     return response()->json([
         'pairingTxId'               => $tx->pairing_tx_id,

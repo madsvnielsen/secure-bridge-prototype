@@ -12,6 +12,7 @@ class BridgeConfiguration extends Model
         'bridge_configuration_id',
         'bridge_name',
         'project_ids',
+        'cert_serial'
     ];
 
     protected $casts = [

@@ -16,6 +16,8 @@ return new class extends Migration {
 
             $table->json('project_ids')->nullable();
 
+            $table->unsignedInteger('cert_serial')->nullable();
+
             $table->timestamps();
         });
     }
