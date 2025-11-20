@@ -12,10 +12,12 @@ class BridgeConfiguration extends Model
         'bridge_configuration_id',
         'bridge_name',
         'project_ids',
-        'cert_serial'
+        'cert_serial',
+        "revoked_at"
     ];
 
     protected $casts = [
         'project_ids' => 'array',
+        'cert_serial' => 'string',
     ];
 }

@@ -2,8 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\BridgeConfiguration;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use phpseclib3\File\X509;
+use phpseclib3\Crypt\PublicKeyLoader;
+use phpseclib3\Math\BigInteger;
+
 
 class CertificateAuthority
 {
@@ -23,8 +29,7 @@ class CertificateAuthority
     }
 
     /**
-     * Issue a bridge client certificate from a CSR
-
+     * Issue a bridge client certificate from a CSR.
      */
     public function issueBridgeCertificate(string $csrPem, string $bridgeConfigurationId): array
     {
@@ -101,7 +106,7 @@ CONF;
         return [
             'deviceCertificateChainPem' => $deviceCertChainPem,
             'caBundlePem'               => $caCertPem,
-            "caSerial"                  => $serial
+            "caSerial"                  => $serial  
         ];
     }
 
@@ -169,9 +174,91 @@ CONF;
 
         $sha256Raw = hash('sha256', $der, true);
 
-        // Base64url
         $x5tS256 = rtrim(strtr(base64_encode($sha256Raw), '+/', '-_'), '=');
 
         return $x5tS256;
+    }
+    
+    public function getCrlPemPath(): string
+    {
+        return env('BRIDGE_CRL_PATH', '/var/lib/hococo-crl/bridge.crl.pem');
+    }
+
+    /**
+     * Mark a certificate as revoked in the DB and regenerate CRL.
+     */
+    public function revokeBridgeCertificateBySerial(string $serial): void
+    {
+        BridgeConfiguration::where('cert_serial', $serial)->update([
+            'revoked_at' => now(),
+        ]);
+
+        // Rebuild CRL
+        $this->generateX509CrlFromDb();
+    }
+
+    /**
+     * Build a X.509 CRL from all revoked bridge cert serials in DB.
+     */
+    public function generateX509CrlFromDb(): void
+    {
+        $caCertPath = env('CA_CERT_PATH', '/app/certs/ca/ca.crt');
+        $caKeyPath  = env('CA_KEY_PATH',  '/app/certs/ca/ca.key');
+        $pemPath    = $this->getCrlPemPath();
+
+        $caCertPem = @file_get_contents($caCertPath);
+        $caKeyPem  = @file_get_contents($caKeyPath);
+
+        if ($caCertPem === false || $caKeyPem === false) {
+            throw new RuntimeException("CA certificate or key not found (paths: $caCertPath, $caKeyPath)");
+        }
+
+        $issuer = new X509();
+        $issuer->loadX509($caCertPem);
+        $issuer->setPrivateKey(PublicKeyLoader::loadPrivateKey($caKeyPem));
+
+        $crl   = new X509();
+        $empty = new X509(); 
+
+        $baseCrl = $crl->signCRL($issuer, $empty);
+        $crl->loadCRL($crl->saveCRL($baseCrl));
+
+        $crl->setStartDate('now');
+        $crl->setEndDate('+365 days');
+
+        $rows = BridgeConfiguration::whereNotNull('revoked_at')
+            ->whereNotNull('cert_serial')
+            ->get(['cert_serial']);
+
+        foreach ($rows as $row) {
+            $serial = trim((string) $row->cert_serial);
+            if ($serial === '') {
+                continue;
+            }
+
+            $crl->setRevokedCertificateExtension(
+                $serial,
+                'id-ce-cRLReasons',
+                'unspecified'
+            );
+        }
+
+        $signed = $crl->signCRL($issuer, $crl);
+        $pem    = $crl->saveCRL($signed);
+
+        if ($pem === false) {
+            throw new RuntimeException('Failed to encode CRL to PEM.');
+        }
+
+        $dir = dirname($pemPath);
+        if (! is_dir($dir)) {
+            if (! mkdir($dir, 0775, true) && ! is_dir($dir)) {
+                throw new RuntimeException("Failed to create CRL directory: {$dir}");
+            }
+        }
+
+        if (file_put_contents($pemPath, $pem, LOCK_EX) === false) {
+            throw new RuntimeException("Failed to write X.509 CRL PEM to {$pemPath}");
+        }
     }
 }

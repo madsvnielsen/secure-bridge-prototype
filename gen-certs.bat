@@ -62,6 +62,7 @@ echo    - Writing api.ext (SAN config) ...
   echo [alt_names]
   echo DNS.1 = api.hococo.internal
   echo DNS.2 = api
+  echo DNS.3 = localhost
 ) > "%API_DIR%\api.ext"
 
 echo    - Signing api.csr with CA ...

@@ -5,6 +5,9 @@ networks:
   net_onprem:
     internal: true
 
+volumes:
+  crl-data: {}
+
 services:
   edge:
     container_name: edge
@@ -17,6 +20,7 @@ services:
       - ./api/certs/api:/etc/nginx/certs/api:ro
       - ./api/certs/ws:/etc/nginx/certs/ws:ro
       - ./api/certs/ca/ca.crt:/etc/nginx/certs/ca/hococo_ca.crt:ro
+      - crl-data:/etc/nginx/crl:ro
     depends_on: [api, ws]
     networks:
       net_internet:
@@ -27,15 +31,26 @@ services:
         aliases:
           - api.hococo.internal
           - ws.hococo.internal
+    command: >
+      sh -c "
+        ( while :; do
+            sleep 60;
+            nginx -s reload || true;
+          done ) &
+        nginx -g 'daemon off;'
+      "
 
   api:
     container_name: api
     build: ./api
     environment:
       - APP_ENV=local
+      - CA_DIR=/app/certs/ca
+      - BRIDGE_CRL_PATH=/var/lib/hococo-crl/bridge.crl.pem
+
+    volumes:
+      - crl-data:/var/lib/hococo-crl
     networks: [net_internet, net_cloud]
-
-
 
   ws:
     container_name: ws

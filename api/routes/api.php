@@ -17,6 +17,44 @@ if (app()->environment('local')) {
     Route::get('/dev/bridge-configs', function () {
         return BridgeConfiguration::orderByDesc('created_at')->get();
     });
+    
+    Route::post('dev/bridges/{id}/revoke', function (
+        Request $request,
+        string $id,
+        CertificateAuthority $certificateAuthority
+    ) {
+        $bridgeConfig = BridgeConfiguration::where('bridge_configuration_id', $id)->first();
+
+        if (! $bridgeConfig) {
+            return response()->json([
+                'error'   => 'not_found',
+                'message' => 'Bridge configuration not found',
+            ], 404);
+        }
+
+        if (! $bridgeConfig->cert_serial) {
+            return response()->json([
+                'error'   => 'no_certificate',
+                'message' => 'This bridge configuration has no issued certificate to revoke.',
+            ], 400);
+        }
+
+        try {
+            $certificateAuthority->revokeBridgeCertificateBySerial(
+                (string) $bridgeConfig->cert_serial
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'error'   => 'revoke_failed',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
+            'status'                => 'revoked',
+        ]);
+    });
 }
 
 Route::post('/bridges/pair/start', function (Request $request, PairingService $pairingService) {
@@ -59,7 +97,6 @@ Route::post('/hub/pair/claim', function (Request $request, PairingService $pairi
             $data['bridgeName']
         );
     } catch (\RuntimeException $e) {
-        // Misconfigured secret, etc.
         return response()->json([
             'error'   => 'server_error',
             'message' => $e->getMessage(),
@@ -222,3 +259,4 @@ Route::post('/bridges/{id}/token', function (
 
     return response()->json($tokenData, 201);
 });
+
