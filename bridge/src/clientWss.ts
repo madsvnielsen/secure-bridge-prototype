@@ -40,7 +40,7 @@ export function initBridgeWs() {
   ws.on("close", (code: number, data: RawData) => {
     const reason = data?.toString?.() || "";
     console.log("WSS CLOSED", code, reason);
-    initBridgeWs(); // Reconnect
+    //initBridgeWs(); // Reconnect
   });
 
   ws.on("error", (err: Error) => {

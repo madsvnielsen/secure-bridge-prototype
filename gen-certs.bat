@@ -51,7 +51,7 @@ echo    - Creating api.csr with CN=api.hococo.internal ...
   -out "%API_DIR%\api.csr" ^
   -subj "/CN=api.hococo.internal"
 
-echo    - Writing api.ext (SAN config) ...
+echo    - Writing api.ext (SAN config for API server) ...
 (
   echo authorityKeyIdentifier=keyid,issuer
   echo basicConstraints=CA:FALSE
@@ -76,7 +76,42 @@ echo    - Signing api.csr with CA ...
   -sha256 ^
   -extfile "%API_DIR%\api.ext"
 
-REM === 3) WS server cert ===
+echo ==^> Generating API CLIENT key + CSR + cert  ...
+
+echo    - Creating api-client.key ...
+"%OPENSSL%" genrsa -out "%API_DIR%\api-client.key" 2048
+
+echo    - Creating api-client.csr with CN=Hococo-API-Client ...
+"%OPENSSL%" req -new ^
+  -key "%API_DIR%\api-client.key" ^
+  -out "%API_DIR%\api-client.csr" ^
+  -subj "/CN=Hococo-API-Client"
+
+echo    - Writing api-client.ext ...
+(
+  echo authorityKeyIdentifier=keyid,issuer
+  echo basicConstraints=CA:FALSE
+  echo keyUsage = digitalSignature, keyEncipherment
+  echo extendedKeyUsage = clientAuth
+  echo subjectAltName = @alt_names
+  echo.
+  echo [alt_names]
+  echo DNS.1 = api.hococo.internal
+  echo DNS.2 = api
+  echo DNS.3 = localhost
+) > "%API_DIR%\api-client.ext"
+
+echo    - Signing api-client.csr with CA ...
+"%OPENSSL%" x509 -req ^
+  -in "%API_DIR%\api-client.csr" ^
+  -CA "%CA_DIR%\ca.crt" ^
+  -CAkey "%CA_DIR%\ca.key" ^
+  -CAcreateserial ^
+  -out "%API_DIR%\api-client.crt" ^
+  -days 365 ^
+  -sha256 ^
+  -extfile "%API_DIR%\api-client.ext"
+
 echo.
 echo ==^> Generating WS server key + CSR + cert ...
 
@@ -89,7 +124,7 @@ echo    - Creating ws.csr with CN=ws.hococo.internal ...
   -out "%WS_DIR%\ws.csr" ^
   -subj "/CN=ws.hococo.internal"
 
-echo    - Writing ws.ext (SAN config) ...
+echo    - Writing ws.ext ...
 (
   echo authorityKeyIdentifier=keyid,issuer
   echo basicConstraints=CA:FALSE
@@ -100,6 +135,7 @@ echo    - Writing ws.ext (SAN config) ...
   echo [alt_names]
   echo DNS.1 = ws.hococo.internal
   echo DNS.2 = ws
+  echo DNS.3 = localhost
 ) > "%WS_DIR%\ws.ext"
 
 echo    - Signing ws.csr with CA ...
@@ -115,9 +151,10 @@ echo    - Signing ws.csr with CA ...
 
 echo.
 echo ==^> Done.
-echo    CA:  %CA_DIR%\ca.crt
-echo    API: %API_DIR%\api.crt  + %API_DIR%\api.key
-echo    WS:  %WS_DIR%\ws.crt    + %WS_DIR%\ws.key
+echo    CA:         %CA_DIR%\ca.crt
+echo    API server: %API_DIR%\api.crt        + %API_DIR%\api.key
+echo    API client: %API_DIR%\api-client.crt + %API_DIR%\api-client.key
+echo    WSS server: %WS_DIR%\ws.crt          + %WS_DIR%\ws.key
 
 endlocal
 exit /b 0

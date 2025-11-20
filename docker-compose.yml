@@ -31,6 +31,12 @@ services:
         aliases:
           - api.hococo.internal
           - ws.hococo.internal
+    environment:
+      - WS_ADMIN_URL=https://ws.hococo.internal:9443/admin/ws
+      - WS_ADMIN_CERT=/app/certs/api/api-client.crt
+      - WS_ADMIN_KEY=/app/certs/api/api-client.key
+      - WS_ADMIN_CA=/app/certs/ca/ca.crt
+
     command: >
       sh -c "
         ( while :; do

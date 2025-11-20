@@ -1,15 +1,14 @@
 import http from "http";
 import { WebSocketServer } from "ws";
 import { Certificate } from "@fidm/x509";
+import { getClientRoleFromCert } from "./certUtils.ts";
 
 // Map bridgeIdentity -> WebSocket
 // bridgeIdentity will be SAN "bridge:<id>"
 const bridgeConnections = new Map<string, import("ws").WebSocket>();
 
 /**
- * Take the escaped PEM coming from NGINX's $ssl_client_escaped_cert
- * and normalize it into a proper multi-line PEM block.
- * $ssl_client_escaped_cert is URL-encoded, so we should decode it first.
+ * $ssl_client_escaped_cert in nginx URL-encoded and flattened. This function restores the PEM format.
  */
 function normalizePem(flatPem?: string | string[]): string | null {
   if (!flatPem) return null;
@@ -62,12 +61,58 @@ function extractBridgeConfigurationIdFromCert(pem: string): string | null {
   return null;
 }
 
-// Logging of HTTP requests without upgrade header.
 const server = http.createServer((req, res) => {
+  if (req.method === "POST" && req.url === "/admin/ws/bridges/disconnect") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk.toString("utf8")));
+    req.on("end", () => {
+      try {
+        const rawCertHeader = req.headers["ssl-client-cert"];
+        const pem = normalizePem(rawCertHeader as string | string[]);
+        if (!pem) {
+          res.statusCode = 401;
+          return res.end("Missing or invalid client cert");
+        }
+
+        const role = getClientRoleFromCert(pem);
+        if (role.type !== "api") {
+          res.statusCode = 403;
+          return res.end("Forbidden: only API client is allowed");
+        }
+
+        const payload = JSON.parse(body || "{}");
+        const bridgeId = String(payload.bridgeConfigurationId || "").trim();
+        if (!bridgeId) {
+          res.statusCode = 400;
+          return res.end("Missing bridgeConfigurationId");
+        }
+
+        const socket = bridgeConnections.get(bridgeId);
+        if (!socket) {
+          console.log("No active WS connection for bridge", bridgeId);
+          res.statusCode = 204;
+          return res.end();
+        }
+
+        console.log("Closing WS connection for revoked bridge", bridgeId);
+        bridgeConnections.delete(bridgeId);
+        socket.close(4001, "Bridge certificate revoked");
+
+        res.statusCode = 204;
+        return res.end();
+      } catch (err: any) {
+        console.error("Admin disconnect error:", err);
+        res.statusCode = 500;
+        return res.end("Internal error");
+      }
+    });
+    return;
+  }
+
   console.log("HTTP request on WS server:", req.method, req.url);
   res.statusCode = 400;
   res.setHeader("Content-Type", "text/plain");
-  res.end("Expected WebSocket upgrade\n");
+  res.end("Expected WebSocket upgrade or admin call\n");
 });
 
 // Called when an upgrade request is received.
@@ -80,12 +125,7 @@ const wss = new WebSocketServer({ server });
 
 // WSS connection handler
 wss.on("connection", (socket, req) => {
-  console.log(
-    "WS connection accepted from",
-    req.socket.remoteAddress,
-    "url =",
-    req.url
-  );
+  console.log("WS connection accepted from", req.socket.remoteAddress, "url =", req.url);
 
   try {
     const rawCertHeader = req.headers["ssl-client-cert"];
@@ -95,17 +135,6 @@ wss.on("connection", (socket, req) => {
     const subjectDn = subjectDnHeader ? String(subjectDnHeader) : "";
     const issuerDn = issuerDnHeader ? String(issuerDnHeader) : "";
 
-    console.log("New WS connection from", req.socket.remoteAddress);
-    console.log("Client subject DN:", subjectDn || "<missing>");
-    console.log("Client issuer  DN:", issuerDn || "<missing>");
-    console.log(
-      "Client cert header preview:\n" +
-        (rawCertHeader ? String(rawCertHeader).slice(0, 120) : "null")
-    );
-
-    // 1) nginx reverse proxy already did mTLS verification, so we can trust the cert.
-
-    // 2) Reconstruct PEM from escaped header passed from nginx
     const pem = normalizePem(rawCertHeader as string | string[]);
     if (!pem) {
       console.warn("Could not reconstruct PEM from ssl-client-cert header");
@@ -113,66 +142,55 @@ wss.on("connection", (socket, req) => {
       return;
     }
 
-    // 3) Try SAN-based bridgeConfigurationId
-    const sanBridgeId = extractBridgeConfigurationIdFromCert(pem);
+    const role = getClientRoleFromCert(pem);
 
-    // 4) Fallback identity is subject DND
-    const identity = sanBridgeId || subjectDn;
+    if (role.type === "bridge") {
+      const identity = role.bridgeId;
+      console.log("Bridge connected. bridgeId =", identity);
 
-    if (!identity) {
-      console.warn("No usable identity (SAN bridge: or subject DN) in client cert");
-      socket.close(1008, "Missing bridge identity");
+      bridgeConnections.set(identity, socket as any);
+
+      (socket as any).bridgeIdentity = identity;
+      (socket as any).bridgeSubjectDn = subjectDn;
+      (socket as any).bridgeIssuerDn = issuerDn;
+
+      socket.on("message", (data) => {
+        const text = data.toString();
+        console.log("WS msg from bridge", identity, ":", text);
+
+        socket.send(
+          JSON.stringify({
+            from: "wss",
+            bridgeIdentity: identity,
+            subjectDn,
+            echo: text,
+          })
+        );
+      });
+
+      socket.on("close", (code, reason) => {
+        console.log("Bridge disconnected:", identity, "code:", code, "reason:", reason?.toString?.() ?? "");
+        const current = bridgeConnections.get(identity);
+        if (current === socket) {
+          bridgeConnections.delete(identity);
+        }
+      });
+
+      socket.on("error", (err) => {
+        console.error("WS error for bridge", identity, ":", err.message);
+      });
+
       return;
     }
 
-    console.log(
-      "Bridge connected. identity =",
-      identity,
-      sanBridgeId ? `(SAN bridge:${sanBridgeId})` : "(using subject DN)"
-    );
+    if (role.type === "api") {
+      console.log("API tried to open /ws WebSocket");
+      socket.close(1008, "API WS not supported on /ws");
+      return;
+    }
 
-    // Track this bridge connection
-    bridgeConnections.set(identity, socket as any);
-
-    // Attach metadata to socket for later use
-    (socket as any).bridgeIdentity = identity;
-    (socket as any).bridgeSubjectDn = subjectDn;
-    (socket as any).bridgeIssuerDn = issuerDn;
-
-    // --- Message handling ---
-    socket.on("message", (data: any) => {
-      const text = data.toString();
-      console.log("WS msg from", identity, ":", text);
-
-      socket.send(
-        JSON.stringify({
-          from: "wss",
-          bridgeIdentity: identity,
-          subjectDn,
-          echo: text,
-        })
-      );
-    });
-
-    socket.on("close", (code: any, reason: any) => {
-      console.log(
-        "Bridge disconnected:",
-        identity,
-        "code:",
-        code,
-        "reason:",
-        reason?.toString?.() ?? ""
-      );
-
-      const current = bridgeConnections.get(identity);
-      if (current === socket) {
-        bridgeConnections.delete(identity);
-      }
-    });
-
-    socket.on("error", (err: any) => {
-      console.error("WS error for", identity, ":", err.message);
-    });
+    console.warn("Unknown client role: no SAN bridge or or api in client cert");
+    socket.close(1008, "Unknown client identity");
   } catch (err) {
     console.error("Fatal error during WS connection init:", err);
     socket.close(1011, "Internal error");

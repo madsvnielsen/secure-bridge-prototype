@@ -18,7 +18,7 @@ if (app()->environment('local')) {
         return BridgeConfiguration::orderByDesc('created_at')->get();
     });
     
-    Route::post('dev/bridges/{id}/revoke', function (
+    Route::post('/dev/bridges/{id}/revoke', function (
         Request $request,
         string $id,
         CertificateAuthority $certificateAuthority
@@ -48,6 +48,23 @@ if (app()->environment('local')) {
                 'error'   => 'revoke_failed',
                 'message' => $e->getMessage(),
             ], 500);
+        }
+
+        try {
+            $baseUrl = config('app.ws_admin_url', env('WS_ADMIN_URL', 'https://ws.hococo.internal:9443/admin/ws'));
+
+            Http::withOptions([
+                'cert'    => env('WS_ADMIN_CERT', '/app/certs/api/api-client.crt'),
+                'ssl_key' => env('WS_ADMIN_KEY', '/app/certs/api/api-client.key'),
+                'verify'  => env('WS_ADMIN_CA', '/app/certs/ca/ca.crt'),
+            ])->post($baseUrl . '/bridges/disconnect', [
+                'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to notify WSS about revoked bridge', [
+                'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
+                'error'                 => $e->getMessage(),
+            ]);
         }
 
         return response()->json([
