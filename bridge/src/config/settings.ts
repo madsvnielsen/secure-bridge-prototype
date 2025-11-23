@@ -50,11 +50,10 @@ export function loadBridgeSettings(): BridgeSettings | null {
 
 export function saveBridgeSettings(settings: BridgeSettings) {
   ensureBridgeStateDir();
-  fs.writeFileSync(
-    BRIDGE_SETTINGS_PATH,
-    JSON.stringify(settings, null, 2),
-    { encoding: "utf8", mode: 0o600 }
-  );
+  fs.writeFileSync(BRIDGE_SETTINGS_PATH, JSON.stringify(settings, null, 2), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
 }
 
 export function hasExistingCertificates(): boolean {

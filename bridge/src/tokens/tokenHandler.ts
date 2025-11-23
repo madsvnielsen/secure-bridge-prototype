@@ -1,11 +1,10 @@
 import { buildHttpsClient } from "../config/config";
 import { loadBridgeSettings } from "../config/settings";
 
-
 export async function getToken() {
   const settings = loadBridgeSettings();
   const bridgeConfigurationId = settings?.bridgeConfigurationId;
-  
+
   if (!bridgeConfigurationId) {
     throw new Error("Bridge configuration ID is not set in settings");
   }
@@ -13,7 +12,7 @@ export async function getToken() {
   const client = buildHttpsClient();
   const res = await client.post(
     `/bridges/${bridgeConfigurationId}/token`,
-    null, 
+    null,
     {
       headers: {
         "Content-Type": "application/json",

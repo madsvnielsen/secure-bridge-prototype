@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import https from "https";
 import axios from "axios";
+import WebSocket from "ws";
 import { loadBridgeSettings } from "./settings";
 
 const BRIDGE_STATE_DIR =
@@ -17,10 +18,10 @@ const httpListenerConfig = Object.freeze({
 });
 
 const httpConfig = Object.freeze({
-    enableHttp2: false,
-    onlyHttp2: false,
-    allowHTTP1: true,
-    minVersion: 'TLSv1.2'
+  enableHttp2: false,
+  onlyHttp2: false,
+  allowHTTP1: true,
+  minVersion: "TLSv1.2",
 });
 
 const certConfig = Object.freeze({
@@ -42,40 +43,56 @@ const buildClientConfig = () =>
   });
 
 const buildAPIClientConfig = () =>
-Object.freeze({
-  ...httpListenerConfig,
-  ...httpConfig,
+  Object.freeze({
+    ...httpListenerConfig,
+    ...httpConfig,
 
-  key: fs.readFileSync(certConfig.clientKey, "utf8"),
-  cert: fs.readFileSync(certConfig.clientCert, "utf8"),
-  ca: fs.readFileSync(certConfig.caBundle, "utf8"),
-  servername: httpListenerConfig.host,
+    key: fs.readFileSync(certConfig.clientKey, "utf8"),
+    cert: fs.readFileSync(certConfig.clientCert, "utf8"),
+    ca: fs.readFileSync(certConfig.caBundle, "utf8"),
+    servername: httpListenerConfig.host,
   });
-
 
 export const buildHttpsClient = () => {
   const options = apiClientConfig();
   const settings = loadBridgeSettings();
-  
+
   const httpsAgent = new https.Agent({
     rejectUnauthorized: true,
     key: options.key,
     cert: options.cert,
     ca: options.ca,
   });
-  
-  if(!settings?.apiBaseUrl) {
+
+  if (!settings?.apiBaseUrl) {
     throw new Error("API Base URL is not defined in bridge settings");
   }
 
   return axios.create({
-    baseURL: settings?.apiBaseUrl,         
+    baseURL: settings?.apiBaseUrl,
     httpsAgent,
     timeout: 10_000,
   });
-}
+};
 
+export const BuildWssClient = () => {
+  const options = clientConfig();
+  const { host, port, ...tlsOptions } = options;
+
+  const url = `wss://${host}:${port}/ws`;
+  console.log("Connecting to", url);
+
+  return new WebSocket(url, {
+    key: tlsOptions.key,
+    cert: tlsOptions.cert,
+    ca: tlsOptions.ca,
+    rejectUnauthorized: true,
+    headers: {
+      Host: host,
+    },
+  });
+};
 
 export const clientConfig = buildClientConfig;
 export const apiClientConfig = buildAPIClientConfig;
-export { certConfig, listenerConfig, httpConfig};
+export { certConfig, listenerConfig, httpConfig };

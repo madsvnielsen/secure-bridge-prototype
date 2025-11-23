@@ -1,8 +1,8 @@
 import fs from "fs";
 import https from "https";
 import express from "express";
-import { registerPairingRoutes } from "./pairingRoutes";
-import { bootstrapExistingBridge} from "./bridgeStartup";
+import { registerPairingRoutes } from "./controller/pairing";
+import { bootstrapExistingBridge } from "./controller/startup";
 import { getCurrentToken } from "./tokens/tokenStore";
 import { renderBridgeStatus } from "./pages/renderBridgeStatus";
 import { ensureBridgeStateDir, loadBridgeSettings } from "./config/settings";

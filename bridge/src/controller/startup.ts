@@ -1,10 +1,13 @@
 import fs from "fs";
 import path from "path";
-import { apiClientConfig } from "./config/config.ts";
-import { getToken } from "./tokens/tokenHandler.ts";
-import { storeTokenFromResponse } from "./tokens/tokenStore.ts";
-import { initBridgeWs } from "./clientWss.ts";
-import { hasExistingCertificates, loadBridgeSettings } from "./config/settings.ts";
+import { apiClientConfig } from "../config/config.ts";
+import { getToken } from "../tokens/tokenHandler.ts";
+import { storeTokenFromResponse } from "../tokens/tokenStore.ts";
+import { initBridgeWs } from "./wss.ts";
+import {
+  hasExistingCertificates,
+  loadBridgeSettings,
+} from "../config/settings.ts";
 
 /**
  * Bootstrap bridge on startup if it already has certs & settings
@@ -25,13 +28,12 @@ export async function bootstrapExistingBridge() {
     return;
   }
 
-
   console.log(
     "[Bridge] Found existing certs & settings. Trying to fetch token and connect WSS…"
   );
 
   try {
-    const tokenData = await getToken()
+    const tokenData = await getToken();
     storeTokenFromResponse(tokenData);
 
     initBridgeWs(settings);

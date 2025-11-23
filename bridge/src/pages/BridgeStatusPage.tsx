@@ -199,7 +199,9 @@ export function BridgeStatusPage({ settings, token }: BridgeStatusProps) {
         });
       }
 
-      const initialBridgeId = ${JSON.stringify(settings?.bridgeConfigurationId ?? null)};
+      const initialBridgeId = ${JSON.stringify(
+        settings?.bridgeConfigurationId ?? null
+      )};
       if (initialBridgeId) {
         setBridgeId(initialBridgeId);
         setState("Paired");
@@ -292,9 +294,7 @@ export function BridgeStatusPage({ settings, token }: BridgeStatusProps) {
 
               <dt>Pairing Tx ID</dt>
               <dd>
-                <code id="pairing-tx-id">
-                  {settings?.pairingTxId ?? "–"}
-                </code>
+                <code id="pairing-tx-id">{settings?.pairingTxId ?? "–"}</code>
               </dd>
 
               <dt>Bridge configuration ID</dt>
@@ -320,9 +320,7 @@ export function BridgeStatusPage({ settings, token }: BridgeStatusProps) {
             <p>
               Token state:{" "}
               <span
-                className={`badge ${
-                  tokenValid ? "badge-ok" : "badge-err"
-                }`}
+                className={`badge ${tokenValid ? "badge-ok" : "badge-err"}`}
               >
                 {tokenValid ? "In memory" : "No token"}
               </span>
@@ -340,9 +338,7 @@ export function BridgeStatusPage({ settings, token }: BridgeStatusProps) {
           </div>
         </div>
 
-        <script
-          dangerouslySetInnerHTML={{ __html: pairingScript }}
-        ></script>
+        <script dangerouslySetInnerHTML={{ __html: pairingScript }}></script>
       </body>
     </html>
   );

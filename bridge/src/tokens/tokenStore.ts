@@ -2,7 +2,7 @@ export type BridgeToken = {
   accessToken: string;
   tokenType: string;
   scope: string;
-  expiresAt: number; 
+  expiresAt: number;
 };
 
 let currentToken: BridgeToken | null = null;

@@ -5,19 +5,29 @@ import fs from "fs";
 import crypto from "crypto";
 import forge from "node-forge";
 import path from "path";
-import { BRIDGE_SETTINGS_PATH, BRIDGE_STATE_DIR, BridgeSettings, CA_BUNDLE_PATH, DEVICE_CERT_CHAIN_PATH, saveBridgeSettings } from "./config/settings";
-import { bootstrapExistingBridge } from "./bridgeStartup";
+import {
+  BRIDGE_KEY_PATH,
+  BRIDGE_SETTINGS_PATH,
+  BRIDGE_STATE_DIR,
+  BridgeSettings,
+  CA_BUNDLE_PATH,
+  DEVICE_CERT_CHAIN_PATH,
+  saveBridgeSettings,
+} from "../config/settings";
+import { bootstrapExistingBridge } from "./startup";
+import macaddress from "macaddress";
 
-
-export function registerPairingRoutes(app: express.Express, options: {
-  apiBase: string;
-  httpsAgent: https.Agent;
-}) {
+export function registerPairingRoutes(
+  app: express.Express,
+  options: {
+    apiBase: string;
+    httpsAgent: https.Agent;
+  }
+) {
   const { apiBase, httpsAgent } = options;
 
   let lastPairingTxId: string | null = null;
 
-  const BRIDGE_KEY_PATH = path.join(BRIDGE_STATE_DIR, "bridge.key.pem");
   const BRIDGE_CSR_PATH = path.join(BRIDGE_STATE_DIR, "bridge.csr.pem");
 
   function generatePairingCode() {
@@ -52,8 +62,14 @@ export function registerPairingRoutes(app: express.Express, options: {
     const csrPem = forge.pki.certificationRequestToPem(csr);
     const keyPem = forge.pki.privateKeyToPem(keys.privateKey);
 
-    fs.writeFileSync(BRIDGE_KEY_PATH, keyPem, { encoding: "utf8", mode: 0o600 });
-    fs.writeFileSync(BRIDGE_CSR_PATH, csrPem, { encoding: "utf8", mode: 0o600 });
+    fs.writeFileSync(BRIDGE_KEY_PATH, keyPem, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    fs.writeFileSync(BRIDGE_CSR_PATH, csrPem, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
 
     console.log(
       "Bridge key + CSR written to",
@@ -68,7 +84,8 @@ export function registerPairingRoutes(app: express.Express, options: {
   // ---- Pairing-init endpoint ----
   app.post("/bridge/pair/init", async (_req, res) => {
     try {
-      const bridgeIdentifier = "bridge-prototype-1";
+      const mac = await macaddress.one();
+      const bridgeIdentifier = `bridge-${mac.replace(/:/g, "")}`;
       const { csrPem } = ensureBridgeKeyAndCsr(bridgeIdentifier);
       const pairingCode = generatePairingCode();
       console.log("Generated pairing code:", pairingCode);
@@ -106,8 +123,7 @@ export function registerPairingRoutes(app: express.Express, options: {
   // ---- Pairing-status endpoint ----
   app.get("/bridge/pair/status", async (req, res) => {
     try {
-      const pairingTxId =
-        (req.query.pairingTxId as string) || lastPairingTxId;
+      const pairingTxId = (req.query.pairingTxId as string) || lastPairingTxId;
 
       if (!pairingTxId) {
         return res.status(400).json({
