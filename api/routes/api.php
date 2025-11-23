@@ -132,7 +132,7 @@ Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id
             ], 502);
         }
 
-       $timeoutMs  = 15000;  
+       $timeoutMs  = 1500;  
         $intervalMs = 50;
         $elapsed    = 0;
 
@@ -199,7 +199,7 @@ Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id
 });
 }
 
-Route::post('/bridges/results', function (Request $request) {
+Route::post('/bridges/result', function (Request $request, AuthorizationAuthority $authorizationAuthority) {
     $data = $request->validate([
         'requestId'             => 'required|string',
         'bridgeConfigurationId' => 'required|string',
@@ -207,6 +207,26 @@ Route::post('/bridges/results', function (Request $request) {
         'result'                => 'nullable',
         'error'                 => 'nullable|string',
     ]);
+
+   $bridgeConfigurationId = $data['bridgeConfigurationId'];
+
+    try {
+        $jwtPayload = $authorizationAuthority->authorizeBridgeRequest(
+            $request,
+            $bridgeConfigurationId,
+            'bridge:results'
+        );
+    } catch (RuntimeException $e) {
+        \Log::warning('Bridge result CBAT authorization failed', [
+            'bridgeConfigurationId' => $bridgeConfigurationId,
+            'error' => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'error'   => 'unauthorized',
+            'message' => $e->getMessage(),
+        ], 401);
+    }
 
     $saltoRequest = SaltoRequest::where('request_id', $data['requestId'])
         ->where('bridge_configuration_id', $data['bridgeConfigurationId'])

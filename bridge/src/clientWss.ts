@@ -1,9 +1,10 @@
 import WebSocket, { type RawData } from "ws";
 import { IncomingMessage, ClientRequest } from "http";
 import { clientConfig } from "./config";
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 import https from "https";
 import { BridgeSettings } from "./bridgeStartup";
+import { getCurrentToken, isTokenValid } from "./tokenStore";
 
 export function initBridgeWs(settings: BridgeSettings) {
   const options = clientConfig();
@@ -72,31 +73,21 @@ export function initBridgeWs(settings: BridgeSettings) {
     let error: string | null = null;
 
     try {
-      // Execute command here
-    } catch (err: any) {
+      // Real logic would go here
+    } catch (e: any) {
       success = false;
-      error = err.message;
+      error = e.message ?? "Execution error";
       result = null;
     }
 
-    // Send response to API
     try {
-      console.log(settings.apiBaseUrl)
-      console.log({
+      await postBridgeResult(apiClient, {
         requestId,
-        bridgeConfigurationId: settings.bridgeConfigurationId,
-        success,
-        result,
-        error
-      })
-      await apiClient.post("/bridges/results", {
-        requestId,
-        bridgeConfigurationId: settings.bridgeConfigurationId,
+        bridgeConfigurationId: settings.bridgeConfigurationId!,
         success,
         result,
         error,
       });
-      
       console.log("Bridge sent result for", requestId);
     } catch (err: any) {
       console.error("FAILED to POST result to API:", err.message);
@@ -111,10 +102,30 @@ export function initBridgeWs(settings: BridgeSettings) {
   ws.on("close", (code: number, data: RawData) => {
     const reason = data?.toString?.() || "";
     console.log("WSS CLOSED", code, reason);
-    //initBridgeWs(); // Reconnect
+    initBridgeWs(settings); // Reconnect
   });
 
   ws.on("error", (err: Error) => {
     console.error("WSS ERROR:", err);
+  });
+}
+
+async function postBridgeResult(apiClient: AxiosInstance, payload: {
+  requestId: string;
+  bridgeConfigurationId: string;
+  success: boolean;
+  result: any;
+  error: string | null;
+}) {
+  const token = getCurrentToken();
+  if (!token ) {
+    console.error("No valid bridge token available");
+    return;
+  }
+
+  await apiClient.post("/bridges/result", payload, {
+    headers: {
+      Authorization: `Bearer ${token.accessToken}`,
+    },
   });
 }
