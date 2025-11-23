@@ -5,15 +5,9 @@ import fs from "fs";
 import crypto from "crypto";
 import forge from "node-forge";
 import path from "path";
-import {
-  BRIDGE_STATE_DIR,
-  DEVICE_CERT_CHAIN_PATH,
-  CA_BUNDLE_PATH,
-  BRIDGE_SETTINGS_PATH,
-  saveBridgeSettings,
-  BridgeSettings,
-  bootstrapExistingBridge,
-} from "./bridgeStartup";
+import { BRIDGE_SETTINGS_PATH, BRIDGE_STATE_DIR, BridgeSettings, CA_BUNDLE_PATH, DEVICE_CERT_CHAIN_PATH, saveBridgeSettings } from "./config/settings";
+import { bootstrapExistingBridge } from "./bridgeStartup";
+
 
 export function registerPairingRoutes(app: express.Express, options: {
   apiBase: string;
@@ -214,7 +208,7 @@ export function registerPairingRoutes(app: express.Express, options: {
       }
 
       // Use new certs & settings immediately
-      void bootstrapExistingBridge(apiBase);
+      void bootstrapExistingBridge();
 
       res.status(r.status).json(data);
     } catch (err: any) {

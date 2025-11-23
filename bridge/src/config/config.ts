@@ -1,5 +1,8 @@
 import fs from "fs";
 import path from "path";
+import https from "https";
+import axios from "axios";
+import { loadBridgeSettings } from "./settings";
 
 const BRIDGE_STATE_DIR =
   process.env.BRIDGE_STATE_DIR || "/var/lib/hococo-bridge";
@@ -48,6 +51,30 @@ Object.freeze({
   ca: fs.readFileSync(certConfig.caBundle, "utf8"),
   servername: httpListenerConfig.host,
   });
+
+
+export const buildHttpsClient = () => {
+  const options = apiClientConfig();
+  const settings = loadBridgeSettings();
+  
+  const httpsAgent = new https.Agent({
+    rejectUnauthorized: true,
+    key: options.key,
+    cert: options.cert,
+    ca: options.ca,
+  });
+  
+  if(!settings?.apiBaseUrl) {
+    throw new Error("API Base URL is not defined in bridge settings");
+  }
+
+  return axios.create({
+    baseURL: settings?.apiBaseUrl,         
+    httpsAgent,
+    timeout: 10_000,
+  });
+}
+
 
 export const clientConfig = buildClientConfig;
 export const apiClientConfig = buildAPIClientConfig;

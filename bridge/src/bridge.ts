@@ -2,9 +2,10 @@ import fs from "fs";
 import https from "https";
 import express from "express";
 import { registerPairingRoutes } from "./pairingRoutes";
-import { bootstrapExistingBridge, ensureBridgeStateDir, loadBridgeSettings } from "./bridgeStartup";
-import { getCurrentToken } from "./tokenStore";
+import { bootstrapExistingBridge} from "./bridgeStartup";
+import { getCurrentToken } from "./tokens/tokenStore";
 import { renderBridgeStatus } from "./pages/renderBridgeStatus";
+import { ensureBridgeStateDir, loadBridgeSettings } from "./config/settings";
 
 const apiBase = "https://api.hococo.internal/api";
 
@@ -32,6 +33,6 @@ export async function startBridge() {
   const port = process.env.BRIDGE_HTTP_PORT || 8080;
   app.listen(port, () => {
     console.log("Bridge HTTP server listening on port", port);
-    void bootstrapExistingBridge(apiBase);
+    void bootstrapExistingBridge();
   });
 }

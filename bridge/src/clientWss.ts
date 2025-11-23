@@ -1,10 +1,10 @@
 import WebSocket, { type RawData } from "ws";
 import { IncomingMessage, ClientRequest } from "http";
-import { clientConfig } from "./config";
+import { clientConfig } from "./config/config";
 import axios, { AxiosInstance } from "axios";
 import https from "https";
-import { BridgeSettings } from "./bridgeStartup";
-import { getCurrentToken, isTokenValid } from "./tokenStore";
+import { getCurrentToken } from "./tokens/tokenStore";
+import { BridgeSettings } from "./config/settings";
 
 export function initBridgeWs(settings: BridgeSettings) {
   const options = clientConfig();
