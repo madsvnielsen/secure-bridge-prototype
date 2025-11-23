@@ -73,12 +73,11 @@ if (app()->environment('local')) {
         ]);
     });
 
-    Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id) {
+Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id) {
     $data = $request->validate([
-        'command' => 'required|string|max:255',
-        'type'    => 'sometimes|string|max:255',   
-        'payload' => 'sometimes|array',            
-        'requestId' => 'sometimes|string|max:255', 
+        'command'   => 'required|string|max:255',
+        'type'      => 'sometimes|string|max:255',
+        'payload'   => 'sometimes|array'
     ]);
 
     $bridgeConfig = BridgeConfiguration::where('bridge_configuration_id', $id)->first();
@@ -89,6 +88,17 @@ if (app()->environment('local')) {
         ], 404);
     }
 
+    $requestId = (string) Str::uuid();
+
+    $saltoRequest = SaltoRequest::create([
+        'request_id'             => $requestId,
+        'bridge_configuration_id'=> $bridgeConfig->bridge_configuration_id,
+        'type'                   => 'command',
+        'command'                => $data['command'],
+        'payload'                => $data['payload'],
+        'status'                 => 'pending',
+    ]);
+
     $baseUrl = config('app.ws_admin_url', env('WS_ADMIN_URL', 'https://ws.hococo.internal:9443/admin/ws'));
 
     try {
@@ -96,16 +106,21 @@ if (app()->environment('local')) {
             'cert'    => env('WS_ADMIN_CERT', '/app/certs/api/api-client.crt'),
             'ssl_key' => env('WS_ADMIN_KEY',  '/app/certs/api/api-client.key'),
             'verify'  => env('WS_ADMIN_CA',   '/app/certs/ca/ca.crt'),
-            'timeout' => 5,
+            'timeout' => 2, // this HTTP call should be quick
         ])->post($baseUrl . '/bridges/command', [
             'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
-            'type'                  => $data['type'] ?? 'command',
-            'command'               => $data['command'],
-            'payload'               => $data['payload'] ?? null,
-            'requestId'             => $data['requestId'] ?? null,
+            'type'                  => $saltoRequest->type,
+            'command'               => $saltoRequest->command,
+            'payload'               => $saltoRequest->payload,
+            'requestId'             => $saltoRequest->request_id,
         ]);
 
         if (! $response->successful()) {
+            $saltoRequest->update([
+                'status'        => 'failed',
+                'error_message' => 'WSS HTTP ' . $response->status(),
+            ]);
+
             return response()->json([
                 'error'   => 'ws_command_failed',
                 'message' => 'WSS responded with HTTP ' . $response->status(),
@@ -113,16 +128,56 @@ if (app()->environment('local')) {
             ], 502);
         }
 
+        $timeoutMs  = 1500;
+        $intervalMs = 50;
+        $elapsed    = 0;
+
+        while ($elapsed < $timeoutMs) {
+            $saltoRequest->refresh();
+
+            if ($saltoRequest->status === 'completed') {
+                return response()->json([
+                    'requestId'             => $saltoRequest->request_id,
+                    'bridgeConfigurationId' => $saltoRequest->bridge_configuration_id,
+                    'status'                => 'ok',
+                    'result'                => $saltoRequest->result,
+                ], 200);
+            }
+
+            if ($saltoRequest->status === 'failed') {
+                return response()->json([
+                    'requestId'             => $saltoRequest->request_id,
+                    'bridgeConfigurationId' => $saltoRequest->bridge_configuration_id,
+                    'status'                => 'failed',
+                    'error'                 => $saltoRequest->error_message,
+                ], 502);
+            }
+
+            usleep($intervalMs * 1000);
+            $elapsed += $intervalMs;
+        }
+
+        $saltoRequest->update([
+            'status'        => 'timed_out',
+            'error_message' => 'Bridge did not respond within 1.5s',
+        ]);
+
         return response()->json([
-            'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
-            'status'                => 'command_dispatched',
-            'command'               => $data['command'],
-        ], 202);
+            'requestId'             => $saltoRequest->request_id,
+            'bridgeConfigurationId' => $saltoRequest->bridge_configuration_id,
+            'status'                => 'timeout',
+            'message'               => 'Bridge did not respond within 1.5 seconds',
+        ], 504);
     } catch (\Throwable $e) {
         \Log::warning('Failed to send command to WSS', [
            'bridge_configuration_id' => $bridgeConfig->bridge_configuration_id,
            'command'                 => $data['command'],
            'error'                   => $e->getMessage(),
+        ]);
+
+        $saltoRequest->update([
+            'status'        => 'failed',
+            'error_message' => 'Could not reach WSS admin endpoint: ' . $e->getMessage(),
         ]);
 
         return response()->json([
@@ -132,6 +187,44 @@ if (app()->environment('local')) {
     }
 });
 }
+
+Route::post('/api/bridges/results', function (Request $request) {
+    $data = $request->validate([
+        'requestId'             => 'required|string',
+        'bridgeConfigurationId' => 'required|string',
+        'success'               => 'required|boolean',
+        'result'                => 'sometimes|array',
+        'error'                 => 'sometimes|string',
+    ]);
+
+    $saltoRequest = SaltoRequest::where('request_id', $data['requestId'])
+        ->where('bridge_configuration_id', $data['bridgeConfigurationId'])
+        ->first();
+
+    if (! $saltoRequest) {
+        \Log::warning('Bridge sent result for unknown request', $data);
+
+        return response()->json([
+            'error'   => 'unknown_request',
+            'message' => 'No matching SaltoRequest found',
+        ], 404);
+    }
+
+    if ($data['success']) {
+        $saltoRequest->update([
+            'status' => 'completed',
+            'result' => $data['result'] ?? [],
+        ]);
+    } else {
+        $saltoRequest->update([
+            'status'        => 'failed',
+            'error_message' => $data['error'] ?? 'Unknown bridge error',
+            'result'        => $data['result'] ?? null,
+        ]);
+    }
+
+    return response()->json(['status' => 'ok']);
+});
 
 Route::post('/bridges/pair/start', function (Request $request, PairingService $pairingService) {
     $data = $request->validate([
