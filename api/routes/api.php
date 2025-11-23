@@ -2,6 +2,7 @@
 
 use App\Models\PairingTx;
 use App\Models\BridgeConfiguration;
+use App\Models\SaltoRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Services\CertificateAuthority;
@@ -13,6 +14,9 @@ Route::get('/health', fn () => response()->json(['ok' => true]));
 if (app()->environment('local')) {
     Route::get('/dev/pairing-txs', function () {
         return PairingTx::orderByDesc('created_at')->get();
+    });
+    Route::get('/dev/commands', function () {
+        return SaltoRequest::orderByDesc('created_at')->get();
     });
     Route::get('/dev/bridge-configs', function () {
         return BridgeConfiguration::orderByDesc('created_at')->get();
@@ -106,7 +110,7 @@ Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id
             'cert'    => env('WS_ADMIN_CERT', '/app/certs/api/api-client.crt'),
             'ssl_key' => env('WS_ADMIN_KEY',  '/app/certs/api/api-client.key'),
             'verify'  => env('WS_ADMIN_CA',   '/app/certs/ca/ca.crt'),
-            'timeout' => 2, // this HTTP call should be quick
+            'timeout' => 2, 
         ])->post($baseUrl . '/bridges/command', [
             'bridgeConfigurationId' => $bridgeConfig->bridge_configuration_id,
             'type'                  => $saltoRequest->type,
@@ -128,12 +132,18 @@ Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id
             ], 502);
         }
 
-        $timeoutMs  = 1500;
+       $timeoutMs  = 15000;  
         $intervalMs = 50;
         $elapsed    = 0;
 
         while ($elapsed < $timeoutMs) {
             $saltoRequest->refresh();
+
+            \Log::info('SaltoRequest poll', [
+                'request_id' => $saltoRequest->request_id,
+                'status'     => $saltoRequest->status,
+                'elapsed_ms' => $elapsed,
+            ]);
 
             if ($saltoRequest->status === 'completed') {
                 return response()->json([
@@ -156,6 +166,7 @@ Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id
             usleep($intervalMs * 1000);
             $elapsed += $intervalMs;
         }
+
 
         $saltoRequest->update([
             'status'        => 'timed_out',
@@ -188,13 +199,13 @@ Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id
 });
 }
 
-Route::post('/api/bridges/results', function (Request $request) {
+Route::post('/bridges/results', function (Request $request) {
     $data = $request->validate([
         'requestId'             => 'required|string',
         'bridgeConfigurationId' => 'required|string',
         'success'               => 'required|boolean',
-        'result'                => 'sometimes|array',
-        'error'                 => 'sometimes|string',
+        'result'                => 'nullable',
+        'error'                 => 'nullable|string',
     ]);
 
     $saltoRequest = SaltoRequest::where('request_id', $data['requestId'])
@@ -212,19 +223,21 @@ Route::post('/api/bridges/results', function (Request $request) {
 
     if ($data['success']) {
         $saltoRequest->update([
-            'status' => 'completed',
-            'result' => $data['result'] ?? [],
+            'status'        => 'completed',
+            'result'        => $data['result'] ?? [],
+            'error_message' => null, 
         ]);
     } else {
         $saltoRequest->update([
             'status'        => 'failed',
-            'error_message' => $data['error'] ?? 'Unknown bridge error',
             'result'        => $data['result'] ?? null,
+            'error_message' => $data['error'] ?? 'Unknown bridge error',
         ]);
     }
 
     return response()->json(['status' => 'ok']);
 });
+
 
 Route::post('/bridges/pair/start', function (Request $request, PairingService $pairingService) {
     $data = $request->validate([

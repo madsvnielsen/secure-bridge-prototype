@@ -103,7 +103,7 @@ export async function bootstrapExistingBridge(apiBase: string) {
     );
     storeTokenFromResponse(tokenData);
 
-    initBridgeWs(effectiveApiBase);
+    initBridgeWs(settings);
     console.log("[Bridge] Bootstrap with existing certs + token succeeded.");
   } catch (err: any) {
     console.error(

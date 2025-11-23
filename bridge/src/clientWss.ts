@@ -3,8 +3,9 @@ import { IncomingMessage, ClientRequest } from "http";
 import { clientConfig } from "./config";
 import axios from "axios";
 import https from "https";
+import { BridgeSettings } from "./bridgeStartup";
 
-export function initBridgeWs(apiBase: string) {
+export function initBridgeWs(settings: BridgeSettings) {
   const options = clientConfig();
   const { host, port, ...tlsOptions } = options;
 
@@ -29,7 +30,7 @@ export function initBridgeWs(apiBase: string) {
   });
 
   const apiClient = axios.create({
-    baseURL: apiBase,
+    baseURL: settings.apiBaseUrl!,
     httpsAgent,
     timeout: 10_000,
   });
@@ -59,8 +60,6 @@ export function initBridgeWs(apiBase: string) {
 
     const {
       requestId,
-      bridgeConfigurationId,
-      command,
       payload,
     } = msg;
 
@@ -82,14 +81,22 @@ export function initBridgeWs(apiBase: string) {
 
     // Send response to API
     try {
-      await apiClient.post("/api/bridges/results", {
+      console.log(settings.apiBaseUrl)
+      console.log({
         requestId,
-        bridgeConfigurationId,
+        bridgeConfigurationId: settings.bridgeConfigurationId,
+        success,
+        result,
+        error
+      })
+      await apiClient.post("/bridges/results", {
+        requestId,
+        bridgeConfigurationId: settings.bridgeConfigurationId,
         success,
         result,
         error,
       });
-
+      
       console.log("Bridge sent result for", requestId);
     } catch (err: any) {
       console.error("FAILED to POST result to API:", err.message);

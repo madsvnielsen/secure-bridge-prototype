@@ -38,5 +38,10 @@ RUN mkdir -p /app/certs/ca/newcerts /app/certs/ca/crl \
 
 RUN php artisan ca:crl:init
 
-EXPOSE 8000
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+EXPOSE 8000 8001
+
+CMD ["bash", "-c", "\
+  php artisan serve --host=0.0.0.0 --port=8000 & \
+  php artisan serve --host=0.0.0.0 --port=8001 & \
+  wait -n \
+"]
