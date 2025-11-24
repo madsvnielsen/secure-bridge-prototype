@@ -6,7 +6,7 @@ use App\Models\SaltoRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Services\CertificateAuthority;
-use App\Services\AuthorizationAuthority;
+use App\Services\AuthorizationService;
 use App\Services\PairingService;
 
 Route::get('/health', fn () => response()->json(['ok' => true]));
@@ -77,7 +77,7 @@ if (app()->environment('local')) {
         ]);
     });
 
-Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id) {
+Route::post('/hub/bridges/{id}/command', function (Request $request, string $id) {
     $data = $request->validate([
         'command'   => 'required|string|max:255',
         'type'      => 'sometimes|string|max:255',
@@ -199,7 +199,7 @@ Route::post('/dev/bridges/{id}/commands', function (Request $request, string $id
 });
 }
 
-Route::post('/bridges/result', function (Request $request, AuthorizationAuthority $authorizationAuthority) {
+Route::post('/bridges/result', function (Request $request, AuthorizationService $authorizationService) {
     $data = $request->validate([
         'requestId'             => 'required|string',
         'bridgeConfigurationId' => 'required|string',
@@ -211,7 +211,7 @@ Route::post('/bridges/result', function (Request $request, AuthorizationAuthorit
    $bridgeConfigurationId = $data['bridgeConfigurationId'];
 
     try {
-        $jwtPayload = $authorizationAuthority->authorizeBridgeRequest(
+        $jwtPayload = $authorizationService->authorizeBridgeRequest(
             $request,
             $bridgeConfigurationId,
             'bridge:results'
@@ -399,7 +399,7 @@ Route::post('/bridges/pair/finalize', function (Request $request, PairingService
     $tx                        = $result['tx'];
     $deviceCertificateChainPem = $result['deviceCertificateChainPem'];
     $caBundlePem               = $result['caBundlePem'];
-    $serial                    = $result['caSerial'];
+    $serial                    = $result['certSerial'];
 
     $wssUrl     = config('app.wss_url', env('WSS_URL', 'wss://ws.hococo.internal/ws'));
     $apiBaseUrl = config('app.api_base_url', env('API_BASE_URL', 'https://api.hococo.internal/api'));
@@ -430,7 +430,7 @@ Route::post('/bridges/{id}/token', function (
     Request $request,
     string $id,
     CertificateAuthority $certificateAuthority,
-    AuthorizationAuthority $authorizationAuthority
+    AuthorizationService $authorizationService
 ) {
     $bridgeConfig = BridgeConfiguration::where('bridge_configuration_id', $id)->first();
 
@@ -451,7 +451,7 @@ Route::post('/bridges/{id}/token', function (
     }
 
     try {
-        $tokenData = $authorizationAuthority->issueBridgeToken($id, $thumbprintX5tS256);
+        $tokenData = $authorizationService->issueBridgeToken($id, $thumbprintX5tS256);
     } catch (\RuntimeException $e) {
         return response()->json([
             'error'   => 'token_issue_failed',

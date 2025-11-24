@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use App\Services\CertificateAuthority;
 
 
-class AuthorizationAuthority
+class AuthorizationService
 {
 
     public function __construct(

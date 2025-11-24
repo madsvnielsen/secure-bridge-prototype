@@ -139,7 +139,7 @@ class PairingService
             'tx'                        => $tx,
             'deviceCertificateChainPem' => $result['deviceCertificateChainPem'],
             'caBundlePem'               => $result['caBundlePem'],
-            'caSerial'                  => $result['caSerial']
+            'certSerial'                  => $result['certSerial']
         ];
     }
 }

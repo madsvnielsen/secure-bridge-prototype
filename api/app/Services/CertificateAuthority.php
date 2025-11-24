@@ -106,7 +106,7 @@ CONF;
         return [
             'deviceCertificateChainPem' => $deviceCertChainPem,
             'caBundlePem'               => $caCertPem,
-            "caSerial"                  => $serial  
+            "certSerial"                  => $serial  
         ];
     }
 
