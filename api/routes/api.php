@@ -11,18 +11,17 @@ use App\Services\PairingService;
 
 Route::get('/health', fn () => response()->json(['ok' => true]));
 
-if (app()->environment('local')) {
-    Route::get('/dev/pairing-txs', function () {
+    Route::get('/hub/pairing-txs', function () {
         return PairingTx::orderByDesc('created_at')->get();
     });
-    Route::get('/dev/commands', function () {
+    Route::get('/hub/commands', function () {
         return SaltoRequest::orderByDesc('created_at')->get();
     });
-    Route::get('/dev/bridge-configs', function () {
+    Route::get('/hub/bridge-configs', function () {
         return BridgeConfiguration::orderByDesc('created_at')->get();
     });
     
-    Route::post('/dev/bridges/{id}/revoke', function (
+    Route::post('/hub/bridges/{id}/revoke', function (
         Request $request,
         string $id,
         CertificateAuthority $certificateAuthority
@@ -197,7 +196,6 @@ Route::post('/hub/bridges/{id}/command', function (Request $request, string $id)
         ], 502);
     }
 });
-}
 
 Route::post('/bridges/result', function (Request $request, AuthorizationService $authorizationService) {
     $data = $request->validate([
